@@ -1,151 +1,78 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+from diffusers import StableDiffusionPipeline
+import torch
+from fpdf import FPDF
+from PIL import Image
+import os
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# Load the Stable Diffusion pipeline (ensure that you have GPU if possible)
+@st.cache_resource
+def load_pipeline():
+    return StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4").to("cuda" if torch.cuda.is_available() else "cpu")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+pipe = load_pipeline()
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# Streamlit App Layout
+st.title("Story to Image Generator")
+st.write("Enter your story (up to 6 paragraphs) and generate images for each paragraph to create an illustrated storybook.")
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# Text Input for the story
+story = st.text_area("Enter your story (each paragraph should be separated by a double newline):", height=300)
+paragraphs = story.split("\n\n")
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+if st.button("Generate Images"):
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+    if len(paragraphs) > 6:
+        st.error("Please limit the story to 6 paragraphs.")
+    else:
+        # Generate images for each paragraph
+        images = []
+        for idx, paragraph in enumerate(paragraphs):
+            if paragraph.strip():
+                st.write(f"Generating image for paragraph {idx + 1}...")
+                image = pipe(paragraph).images[0]
+                images.append(image)
+            else:
+                st.error(f"Paragraph {idx + 1} is empty.")
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+        if images:
+            st.success("Images generated successfully!")
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+            # Display images alongside their respective paragraphs
+            st.write("### Story with Images")
+            for paragraph, image in zip(paragraphs, images):
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.image(image, use_column_width=True)
+                with col2:
+                    st.write(paragraph)
 
-    return gdp_df
+            # Function to save images and text to a PDF
+            def save_storybook(paragraphs, images, output_path="storybook.pdf"):
+                pdf = FPDF()
+                pdf.set_auto_page_break(auto=True, margin=15)
+                
+                for paragraph, image in zip(paragraphs, images):
+                    pdf.add_page()
+                    # Add text to the PDF
+                    pdf.set_font("Arial", size=12)
+                    pdf.multi_cell(0, 10, paragraph)
 
-gdp_df = get_gdp_data()
+                    # Save image temporarily
+                    image_path = f"image_{hash(paragraph)}.png"
+                    image.save(image_path)
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+                    # Add image to PDF
+                    pdf.image(image_path, x=10, y=60, w=100)
+                    
+                    # Cleanup temp image
+                    os.remove(image_path)
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+                # Save the PDF
+                pdf.output(output_path)
+                return output_path
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+            # Save the storybook and create a download button
+            storybook_path = save_storybook(paragraphs, images)
+            with open(storybook_path, "rb") as file:
+                st.download_button("Download Storybook (PDF)", file, file_name="storybook.pdf", mime="application/pdf")
