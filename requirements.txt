@@ -1,6 +1,3 @@
-streamlit==1.24.0          # Streamlit version (use the latest stable)
-torch                      # PyTorch, which diffusers depend on
-transformers               # Useful for model-based pipelines
-fpdf==1.7.2                # For generating PDF files
-Pillow==9.3.0              # For image handling and manipulation
-diffusers                  # For generating images using Stable Diffusion
+streamlit
+diffusers 
+transformers
