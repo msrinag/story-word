@@ -1,7 +1,7 @@
 # :earth_americas: Story Image Generator
 
 
-[Story Image Generator](https://colab.research.google.com/drive/14o50hfO4eGWL47h2B4W_yUejPf_4fSYd?usp=sharing)
+[Story Image Generator app link ](https://colab.research.google.com/drive/14o50hfO4eGWL47h2B4W_yUejPf_4fSYd?usp=sharing)
 
 
 ### App Introduction
