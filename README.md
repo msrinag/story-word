@@ -1,5 +1,9 @@
 # :earth_americas: Story Image Generator
 
+
+[Story Image Generator](https://colab.research.google.com/drive/14o50hfO4eGWL47h2B4W_yUejPf_4fSYd?usp=sharing)
+
+
 ### App Introduction
 
 The "Story to Image Generator" is a Streamlit-based web application designed to transform user-written stories into illustrated storybooks. It utilizes the Stable Diffusion model to generate AI-driven images based on the content of each paragraph in the story. Users can enter up to six paragraphs, and for each, a unique image will be created, visually bringing the narrative to life. This tool makes it easy to convert plain text stories into engaging visual experiences with just a few clicks.
